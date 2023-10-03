@@ -1,0 +1,15 @@
+---
+info:
+  title: Datahub
+  description: The Metadata Platform for the Modern Data Stack
+  x-cortex-git:
+    github:
+      alias: r7org
+      repository: rapid7/datahub
+  x-cortex-tag: datahub
+  x-cortex-type: service
+  x-cortex-domain-parents:
+  - tag: data-engineering
+openapi: 3.0.1
+servers:
+- url: "/"
