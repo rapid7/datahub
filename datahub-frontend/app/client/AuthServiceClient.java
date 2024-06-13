@@ -3,6 +3,7 @@ package client;
 import com.datahub.authentication.Authentication;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.inject.Inject;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import javax.annotation.Nonnull;
@@ -47,6 +48,7 @@ public class AuthServiceClient {
   private final Authentication systemAuthentication;
   private final CloseableHttpClient httpClient;
 
+  @Inject
   public AuthServiceClient(
       @Nonnull final String metadataServiceHost,
       @Nonnull final Integer metadataServicePort,
@@ -73,7 +75,6 @@ public class AuthServiceClient {
     CloseableHttpResponse response = null;
 
     try {
-
       final String protocol = this.metadataServiceUseSsl ? "https" : "http";
       final HttpPost request =
           new HttpPost(
@@ -83,6 +84,8 @@ public class AuthServiceClient {
                   this.metadataServiceHost,
                   this.metadataServicePort,
                   GENERATE_SESSION_TOKEN_ENDPOINT));
+
+      log.info("Requesting session token for user: {}", userId);
 
       // Build JSON request to generate a token on behalf of a user.
       final ObjectMapper objectMapper = new ObjectMapper();
@@ -98,7 +101,7 @@ public class AuthServiceClient {
       response = httpClient.execute(request);
       final HttpEntity entity = response.getEntity();
       if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK && entity != null) {
-        // Successfully generated a token for the User
+        log.info("Successfully received session token for user: {}", userId);
         final String jsonStr = EntityUtils.toString(entity);
         return getAccessTokenFromJson(jsonStr);
       } else {
@@ -108,6 +111,7 @@ public class AuthServiceClient {
                 response.getStatusLine().toString(), response.getEntity().toString()));
       }
     } catch (Exception e) {
+      log.error("Failed to generate session token for user: {}", userId, e);
       throw new RuntimeException("Failed to generate session token for user", e);
     } finally {
       try {

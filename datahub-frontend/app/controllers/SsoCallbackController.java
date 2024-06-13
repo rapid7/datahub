@@ -9,11 +9,18 @@ import com.datahub.authentication.Authentication;
 import com.linkedin.entity.client.SystemEntityClient;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
+import javax.inject.Named;
+
+import io.datahubproject.metadata.context.OperationContext;
 import lombok.extern.slf4j.Slf4j;
+import org.pac4j.core.client.Client;
+import org.pac4j.core.client.Clients;
 import org.pac4j.core.config.Config;
 import org.pac4j.core.engine.CallbackLogic;
 import org.pac4j.core.http.adapter.HttpActionAdapter;
@@ -34,21 +41,24 @@ import play.mvc.Results;
 public class SsoCallbackController extends CallbackController {
 
   private final SsoManager _ssoManager;
+  private final Config _config;
 
   @Inject
   public SsoCallbackController(
       @Nonnull SsoManager ssoManager,
-      @Nonnull Authentication systemAuthentication,
+      @Named("systemOperationContext") @Nonnull OperationContext systemOperationContext,
       @Nonnull SystemEntityClient entityClient,
       @Nonnull AuthServiceClient authClient,
+      @Nonnull Config config,
       @Nonnull com.typesafe.config.Config configs) {
     _ssoManager = ssoManager;
+    _config = config;
     setDefaultUrl("/"); // By default, redirects to Home Page on log in.
     setSaveInSession(false);
     setCallbackLogic(
         new SsoCallbackLogic(
             ssoManager,
-            systemAuthentication,
+                systemOperationContext,
             entityClient,
             authClient,
             new CookieConfigs(configs)));
@@ -89,13 +99,13 @@ public class SsoCallbackController extends CallbackController {
 
     SsoCallbackLogic(
         final SsoManager ssoManager,
-        final Authentication systemAuthentication,
+        final OperationContext systemOperationContext,
         final SystemEntityClient entityClient,
         final AuthServiceClient authClient,
         final CookieConfigs cookieConfigs) {
       _oidcCallbackLogic =
           new OidcCallbackLogic(
-              ssoManager, systemAuthentication, entityClient, authClient, cookieConfigs);
+              ssoManager, systemOperationContext, entityClient, authClient, cookieConfigs);
     }
 
     @Override
@@ -126,7 +136,18 @@ public class SsoCallbackController extends CallbackController {
   }
 
   private boolean shouldHandleCallback(final String protocol) {
-    return _ssoManager.isSsoEnabled()
-        && _ssoManager.getSsoProvider().protocol().getCommonName().equals(protocol);
+    if (!_ssoManager.isSsoEnabled()) {
+      return false;
+    }
+    updateConfig();
+    return _ssoManager.getSsoProvider().protocol().getCommonName().equals(protocol);
+  }
+
+  private void updateConfig() {
+    final Clients clients = new Clients();
+    final List<Client> clientList = new ArrayList<>();
+    clientList.add(_ssoManager.getSsoProvider().client());
+    clients.setClients(clientList);
+    _config.setClients(clients);
   }
 }
